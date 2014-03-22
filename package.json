@@ -9,21 +9,14 @@
   "author": "",
   "license": "BSD-2-Clause",
   "dependencies": {
-    "coffee-script": "~1.6.3",
     "convict": "~0.4.1",
     "cjson": "~0.2.1",
     "glob": "~3.2.7",
     "path-extra": "~0.1.1"
   },
-  "larq": {
-    "extensions": {},
-    "compile-statements": {},
-    "%cache": {
-      "routes": {
-        "lib/main.js": 1
-      }
-    }
-  },
   "readme": "ERROR: No README data found!",
-  "_id": "coffeenode-options@0.0.1"
+  "_id": "coffeenode-options@0.0.1",
+  "devDependencies": {
+    "coffee-script": "~1.7.1"
+  }
 }
