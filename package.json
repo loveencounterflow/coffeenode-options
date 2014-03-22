@@ -1,6 +1,6 @@
 {
   "name": "coffeenode-options",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "An options manager",
   "main": "lib/main.js",
   "scripts": {
