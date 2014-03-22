@@ -12,7 +12,9 @@
     "convict": "~0.4.1",
     "cjson": "~0.2.1",
     "glob": "~3.2.7",
-    "path-extra": "~0.1.1"
+    "path-extra": "~0.1.1",
+    "coffeenode-types": "~0.1.0",
+    "coffeenode-trm": "~0.1.13"
   },
   "readme": "ERROR: No README data found!",
   "_id": "coffeenode-options@0.0.1",

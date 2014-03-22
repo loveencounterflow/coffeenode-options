@@ -6,6 +6,6 @@ git commit -m "autocommit" && \
 npm version patch && \
 npm publish && \
 git add package.json && \
-git commit -m "version bump" && \
+git commit -m "version bump"
 git push -u origin master
 
