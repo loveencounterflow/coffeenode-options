@@ -16,57 +16,9 @@ warn                      = TRM.get_logger 'warn',    badge
 help                      = TRM.get_logger 'help',    badge
 echo                      = TRM.echo.bind TRM
 BITSNPIECES               = require 'coffeenode-bitsnpieces'
-# #...........................................................................................................
-# suspend                   = require 'coffeenode-suspend'
-# step                      = suspend.step
-# after                     = suspend.after
-# eventually                = suspend.eventually
-# every                     = suspend.every
-#...........................................................................................................
-### https://github.com/mozilla/node-convict ###
-convict                   = require 'convict'
-#...........................................................................................................
-### https://github.com/kof/node-cjson ###
-# CJSON                     = require 'cjson'
-
-njs_cp = require 'child_process'
-@_get_cwd = ( handler ) ->
-  # njs_cp.exec '../echo-cwd', ( error, stdout, stderr ) ->
-  njs_cp.exec 'pwd', ( error, stdout, stderr ) ->
-    throw error if error?
-    throw new Error stderr if stderr? and stderr.length isnt 0
-    info 'stdout:', rpr stdout
-    info '...', require.resolve njs_path.join __dirname, 'main'
-
 
 #===========================================================================================================
 # HELPERS
-#-----------------------------------------------------------------------------------------------------------
-@_app_home_from_routes = ( routes ) ->
-  ### Return the file system route to the current (likely) application folder. This works by traversing all
-  the routes in `require[ 'main' ][ 'paths' ]` and checking whether one of the `node_modules` folders
-  listed there exists and is a folder; the first match is accepted and returned. If no matching existing
-  route is found, an error is thrown.
-
-  NB that the algorithm works even if the CoffeeNode Options module has been symlinked from another location
-  (rather than 'physically' installed) and even if the application main file has been executed from outside
-  the application folder (i.e. this obviates the need to `cd ~/route/to/my/app` before doing `node ./start`
-  or whatever—you can simply do `node ~/route/to/my/app/start`), but it does presuppose that (1) there *is*
-  a `node_modules` folder in your app folder; (2) there is *no* `node_modules` folder in the subfolder or
-  any of the intervening levels (if any) that contains your startup file. Most modules that follow the
-  established NodeJS / npm way of structuring modules should naturally comply with these assumptions. ###
-  #.........................................................................................................
-  for route in routes
-    try
-      return njs_path.dirname route if ( njs_fs.statSync route ).isDirectory()
-    #.......................................................................................................
-    catch error
-      ### silently ignore missing routes: ###
-      continue if error[ 'code' ] is 'ENOENT'
-      throw error
-  #.........................................................................................................
-  throw new Error "unable to determine application home; tested routes: \n\n  #{routes.join '\n  '}\n"
-
 #-----------------------------------------------------------------------------------------------------------
 @_app_name_from_home = ( app_home ) ->
   return njs_path.basename app_home
@@ -80,11 +32,10 @@ njs_cp = require 'child_process'
 
 #-----------------------------------------------------------------------------------------------------------
 @get_app_info = ( app_home = null, options_filename = null ) ->
-  app_home     ?= @_app_home_from_routes require[ 'main' ][ 'paths' ]
+  app_home     ?= BITSNPIECES.get_app_home()
   app_name      = @_app_name_from_home app_home
   cndid         = @_cndid_from_app_name app_name
   options_route = njs_path.join app_home, ( options_filename ? 'options.json' )
-  schema_route  = njs_path.join app_home, (  schema_filename ? 'options-schema.json' )
   #.........................................................................................................
   R =
     '~isa':             'OPTIONS/app-info'
@@ -93,27 +44,8 @@ njs_cp = require 'child_process'
     'name':             app_name
     'cndid':            cndid
     'options-route':    options_route
-    'schema-route':     schema_route
   #.........................................................................................................
   return R
-
-# #-----------------------------------------------------------------------------------------------------------
-# @get_module_info = ( module_home = null, options_filename = null ) ->
-#   module_home  ?= @_app_home_from_routes require[ 'main' ][ 'paths' ]
-#   module_name   = @_app_name_from_home module_home
-#   cndid         = @_cndid_from_app_name module_name
-#   options_route = njs_path.join module_home, ( options_filename ? 'options.json' )
-#   schema_route  = njs_path.join module_home, (  schema_filename ? 'options-schema.json' )
-#   #.........................................................................................................
-#   R =
-#     '~isa':             'OPTIONS/module-info'
-#     'home':             app_home
-#     'name':             module_name
-#     'cndid':            cndid
-#     'options-route':    options_route
-#     'schema-route':     schema_route
-#   #.........................................................................................................
-#   return R
 
 #-----------------------------------------------------------------------------------------------------------
 @_load = ( name, route ) ->
@@ -134,13 +66,6 @@ njs_cp = require 'child_process'
     throw error
 
 #-----------------------------------------------------------------------------------------------------------
-@_get_schema = ( app_info = null ) ->
-  app_info       ?= @get_app_info()
-  schema_route    = app_info[ 'schema-route'  ]
-  #.........................................................................................................
-  return @_load 'options schema', schema_route
-
-#-----------------------------------------------------------------------------------------------------------
 @_module_name_from_options_filename = ( options_filename ) ->
   matcher = /^([^\/]+)-options.json$/
   unless matcher.test options_filename
@@ -154,13 +79,9 @@ njs_cp = require 'child_process'
 @get_app_options = ->
   #.........................................................................................................
   app_info        = @get_app_info()
-  schema          = @_get_schema app_info
-  cfg             = convict schema
   options_route   = app_info[ 'options-route' ]
   raw_options     = @_load 'options', options_route
   # sorting         = []
-  #.........................................................................................................
-  cfg.load raw_options
   #.........................................................................................................
   R =
     '~isa':         'OPTIONS/options'
@@ -169,17 +90,74 @@ njs_cp = require 'child_process'
     # '%sorting':     sorting
     'app-info':     app_info
   #.........................................................................................................
-  for key of schema
-    throw new Error "illegal options key: #{rpr key}" if key is 'app-info'
-    # sorting.push key
-    R[ key ] = cfg.get key
-  #.........................................................................................................
   return R
 
-# #-----------------------------------------------------------------------------------------------------------
-# @get_module_options = ( app_options, module_name ) ->
 
 
+#===========================================================================================================
+#
+#-----------------------------------------------------------------------------------------------------------
+@compile = ( source, options ) ->
+  change_count  = 0
+  #---------------------------------------------------------------------------------------------------------
+  BITSNPIECES.walk_containers_crumbs_and_values d, ( error, container, crumbs, value ) =>
+    throw error if error?
+    #.......................................................................................................
+    if crumbs is null
+      return
+    #.......................................................................................................
+    [ head..., key, ] = crumbs
+    log "#{locator}:", rpr value
+    # debug rpr key
+    if key is 'box'
+      container[ 'addition' ] = 'yes!'
+      debug container
 
+#-----------------------------------------------------------------------------------------------------------
+@compile_options = ( options ) ->
+  TYPES                 = require 'coffeenode-types'
+  count_key             = @compile_options.count_key
+  options[ count_key ] ?= 0
+  #.........................................................................................................
+  for name, value of options
+    switch type = TYPES.type_of value
+      when 'text'
+        @compile_options.resolve_name.call @, options, null, name, value
+      when 'pod'
+        null
+      when 'list'
+        null
+        # for sub_value, idx in list
+  #.........................................................................................................
+  return options
+
+#-----------------------------------------------------------------------------------------------------------
+@compile_options.count_key   = '%BITSNPIECES/compile-options/change-count'
+@compile_options.no_name_re  = /^\\\$/
+@compile_options.name_re     = /^\$([-_a-zA-Z0-9]+)$/
+
+#-----------------------------------------------------------------------------------------------------------
+@compile_options.resolve_name = ( options, container, key, value ) ->
+  rpr         = ( require 'util' ).inspect
+  count_key   = @compile_options.count_key
+  container  ?= options
+  #.........................................................................................................
+  if ( match = value.match @compile_options.name_re )?
+    new_name  = match[ 1 ]
+    new_value = options[ new_name ]
+    if new_value is undefined
+      throw new Error "member #{rpr key} references undefined key as #{rpr value}"
+    container[ key ]      = new_value
+    options[ count_key ] += 1
+    debug "replaced #{rpr key}: #{rpr value} with #{rpr new_name}: #{rpr new_value}"
+  #.........................................................................................................
+  else
+    new_value             = value.replace @compile_options.no_name_re, '$'
+    container[ key ]      = new_value
+    if value isnt new_value
+      options[ count_key ] += 1
+      debug "replaced #{rpr value} with #{rpr new_value}"
+  #.........................................................................................................
+  return options
 
 

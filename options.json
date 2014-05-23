@@ -1,0 +1,5 @@
+{
+	"comment": "this is only used for demonstration and testing",
+	"foo":			"${/bar}",
+	"bar":			42
+}
