@@ -1,6 +1,6 @@
 {
   "name": "coffeenode-options",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "An options manager",
   "main": "lib/main.js",
   "scripts": {
@@ -19,6 +19,5 @@
   },
   "readme": "ERROR: No README data found!",
   "_id": "coffeenode-options@0.0.1",
-  "devDependencies": {
-  }
+  "devDependencies": {}
 }
